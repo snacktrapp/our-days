@@ -386,6 +386,31 @@ describe("local journal happy path", () => {
     expect(ownMoment.moment.taggedPeopleLabel).toBe("Jordan");
   });
 
+  it("accepts an original under the 128 MiB backstop", async () => {
+    const videoBytes = readFileSync("tests/fixtures/synthetic-short.mp4");
+    const file = new File([videoBytes], "iphone.mp4", { type: "video/mp4" });
+    Object.defineProperty(file, "size", {
+      configurable: true,
+      value: 37 * 1024 * 1024,
+    });
+    await expect(
+      publishVerifiedVideoMoment(access, {
+        file,
+        journalPersonId: localAlexPersonId,
+        body: "A long porch clip.",
+        placeName: "",
+        taggedPersonIds: [],
+        occurredOn: "2026-08-21",
+        occurredAt: null,
+        occurredTimezone: null,
+        durationMs: 40_000,
+      }),
+    ).resolves.toMatchObject({
+      kind: "video",
+      media: expect.objectContaining({ durationMs: 40_000 }),
+    });
+  });
+
   it("accepts a video at 40 seconds and rejects 41 seconds", async () => {
     const videoBytes = readFileSync("tests/fixtures/synthetic-short.mp4");
     const input = {

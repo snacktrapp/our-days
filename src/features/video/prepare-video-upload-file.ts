@@ -1,10 +1,14 @@
 import { VideoUploadError } from "@/features/composer/video-upload";
 import {
+  maximumUploadVideoBytes,
   maximumVideoDurationMs,
   maximumStoredVideoBytes,
   overDurationVideoMessage,
   preferredVideoLongEdgePx,
   storedVideoTooLargeMessage,
+  targetAudioBitsPerSecond,
+  targetStoredVideoBytes,
+  targetVideoBitsPerSecond,
   unsupportedVideoCompressionMessage,
 } from "./video-upload-policy";
 
@@ -31,10 +35,12 @@ type CaptureMethod = "captureStream" | "webkitCaptureStream";
 type AudioContextConstructor = new () => AudioContext;
 
 export type VideoCompressionSupport = Readonly<{
-  captureMethod: CaptureMethod;
+  captureMethod: CaptureMethod | null;
   canvasCapture: boolean;
   mimeType: string;
 }>;
+
+let primedAudioContext: AudioContext | null = null;
 
 type CompressionInput = Readonly<{
   file: File;
@@ -95,12 +101,35 @@ function defaultCompressionSupport(): VideoCompressionSupport | null {
   if (typeof document === "undefined") return null;
   const mimeType = recorderMimeType();
   const method = captureMethod();
-  if (!mimeType || !method) return null;
+  const canvasCapture = canvasCaptureSupported();
+  // iPhone Safari has canvas.captureStream and MediaRecorder without
+  // HTMLVideoElement.captureStream. Either capture path is enough.
+  if (!mimeType || (!method && !canvasCapture)) return null;
   return {
     captureMethod: method,
-    canvasCapture: canvasCaptureSupported(),
+    canvasCapture,
     mimeType,
   };
+}
+
+export function primeVideoCompressionAudio() {
+  const AudioContextCtor = webAudioContextConstructor();
+  if (!AudioContextCtor) return;
+  try {
+    if (!primedAudioContext || primedAudioContext.state === "closed") {
+      primedAudioContext = new AudioContextCtor();
+    }
+    void primedAudioContext.resume().catch(() => undefined);
+  } catch {
+    primedAudioContext = null;
+  }
+}
+
+export function discardPrimedVideoCompressionAudio() {
+  const context = primedAudioContext;
+  primedAudioContext = null;
+  if (!context || context.state === "closed") return;
+  void context.close().catch(() => undefined);
 }
 
 function downscaledDimensions(width: number, height: number) {
@@ -225,14 +254,42 @@ async function resumeAudioContext(context: AudioContext, signal?: AbortSignal) {
   }
 }
 
-function tunedBitrates(durationMs: number) {
-  const durationSeconds = Math.max(1, durationMs / 1000);
-  const total = Math.floor(
-    ((maximumStoredVideoBytes * 8) / durationSeconds) * 0.85,
-  );
-  const audio = 96_000;
-  const video = Math.max(1_000_000, Math.min(3_500_000, total - audio));
-  return { audioBitsPerSecond: audio, videoBitsPerSecond: video };
+function tunedBitrates() {
+  return {
+    audioBitsPerSecond: targetAudioBitsPerSecond,
+    videoBitsPerSecond: targetVideoBitsPerSecond,
+  };
+}
+
+function originalWithinBackstop(size: number) {
+  return size >= 1 && size <= maximumStoredVideoBytes;
+}
+
+function reencodedWithinCeiling(size: number, durationMs: number) {
+  return size >= 1 && size <= maximumUploadVideoBytes(durationMs);
+}
+
+function sourceHasAudioTrack(
+  video: HTMLVideoElement,
+  captured: MediaStream | null,
+  captureMethod: CaptureMethod | null,
+) {
+  const listed = (
+    video as HTMLVideoElement & { audioTracks?: { length: number } }
+  ).audioTracks;
+  if (listed) return listed.length > 0;
+  const probed =
+    captured ?? (captureMethod ? sourceStream(video, captureMethod) : null);
+  if (!probed) {
+    // Unknown on this browser. Assume the clip has sound so a muted
+    // re-encode cannot replace it.
+    return true;
+  }
+  const hasAudio = probed.getAudioTracks().length > 0;
+  if (probed !== captured) {
+    probed.getTracks().forEach((track) => track.stop());
+  }
+  return hasAudio;
 }
 
 function playbackTimeoutMs(durationMs: number) {
@@ -295,16 +352,18 @@ async function waitForPlaybackFinished(input: {
 function createRecorder(
   stream: MediaStream,
   mimeType: string,
-  durationMs: number,
   includeAudio: boolean,
 ) {
-  const { videoBitsPerSecond, audioBitsPerSecond } = tunedBitrates(durationMs);
+  const { videoBitsPerSecond, audioBitsPerSecond } = tunedBitrates();
   const options: MediaRecorderOptions[] = [
     {
       mimeType,
+      bitsPerSecond:
+        videoBitsPerSecond + (includeAudio ? audioBitsPerSecond : 0),
       videoBitsPerSecond,
       ...(includeAudio ? { audioBitsPerSecond } : {}),
     },
+    { mimeType, videoBitsPerSecond },
     { mimeType },
     {},
   ];
@@ -368,6 +427,19 @@ async function readVideoDurationMs(file: File, signal?: AbortSignal) {
   }
 }
 
+function mountPlaybackVideo(video: HTMLVideoElement) {
+  video.setAttribute("aria-hidden", "true");
+  video.tabIndex = -1;
+  // Off-screen, not opacity:0. iPhone Safari skips frames for invisible video.
+  video.style.cssText =
+    "position:fixed;left:-10000px;top:0;width:8px;height:8px;pointer-events:none;";
+  document.body.append(video);
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 async function compressWithMediaRecorder(
   input: CompressionInput,
 ): Promise<File> {
@@ -381,6 +453,7 @@ async function compressWithMediaRecorder(
   video.src = url;
 
   let audioContext: AudioContext | null = null;
+  let releaseAudioContext = false;
   let audioNode: MediaElementAudioSourceNode | null = null;
   let audioDestination: MediaStreamAudioDestinationNode | null = null;
   let recorder: MediaRecorder | null = null;
@@ -391,107 +464,209 @@ async function compressWithMediaRecorder(
   let output: MediaStream | null = null;
   let source: MediaStream | null = null;
   let stopDrawing = () => undefined;
+  let recordingGeneration = 0;
   const chunks: BlobPart[] = [];
+
+  const detachRecorder = () => {
+    if (recorder) {
+      if (onRecorderData) {
+        recorder.removeEventListener("dataavailable", onRecorderData);
+      }
+      if (onRecorderStop) recorder.removeEventListener("stop", onRecorderStop);
+      if (onRecorderError) {
+        recorder.removeEventListener("error", onRecorderError);
+      }
+    }
+    onRecorderData = null;
+    onRecorderStop = null;
+    onRecorderError = null;
+    recorder = null;
+    waitForRecorderStop = null;
+  };
+
+  const abandonRecording = async () => {
+    const stopping = waitForRecorderStop;
+    const active = recorder;
+    if (active && active.state !== "inactive") {
+      try {
+        active.stop();
+      } catch {
+        // Ignore invalid-state stops while restarting.
+      }
+    }
+    if (stopping) {
+      await Promise.race([
+        stopping.catch(() => undefined),
+        new Promise<void>((resolve) =>
+          window.setTimeout(resolve, recorderStopTimeoutMs),
+        ),
+      ]);
+    }
+    detachRecorder();
+  };
+
   try {
+    mountPlaybackVideo(video);
     await waitForMetadata(video, input.signal);
     throwIfAborted(input.signal);
-    source = sourceStream(video, input.support.captureMethod);
-    if (!source) {
-      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
-    }
-    const AudioContextCtor = webAudioContextConstructor();
-    if (!AudioContextCtor) {
-      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
-    }
-    try {
-      audioContext = new AudioContextCtor();
-      audioNode = audioContext.createMediaElementSource(video);
-      audioDestination = audioContext.createMediaStreamDestination();
-      audioNode.connect(audioDestination);
-      await resumeAudioContext(audioContext, input.signal);
-    } catch (error) {
-      await audioContext?.close().catch(() => undefined);
-      audioContext = null;
-      audioNode = null;
-      audioDestination = null;
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw error;
-      }
-      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
-    }
 
-    let videoCaptureStream: MediaStream;
+    let videoCaptureStream: MediaStream | null = null;
     if (input.support.canvasCapture) {
       const canvas = document.createElement("canvas");
       const target = downscaledDimensions(input.width, input.height);
       canvas.width = target.width;
       canvas.height = target.height;
       const context = canvas.getContext("2d");
-      if (!context) throw new VideoUploadError(fallbackPrepareMessage);
-      videoCaptureStream = canvas.captureStream(30);
-      let raf = 0;
-      const draw = () => {
+      if (context) {
         context.drawImage(video, 0, 0, target.width, target.height);
-        if (!video.ended) raf = window.requestAnimationFrame(draw);
-      };
-      draw();
-      stopDrawing = () => {
-        if (raf) window.cancelAnimationFrame(raf);
-      };
-    } else {
+        try {
+          videoCaptureStream = canvas.captureStream(30);
+        } catch {
+          videoCaptureStream = null;
+        }
+        let raf = 0;
+        let drawing = true;
+        const draw = () => {
+          if (!drawing) return;
+          context.drawImage(video, 0, 0, target.width, target.height);
+          if (!video.ended) raf = window.requestAnimationFrame(draw);
+        };
+        if (videoCaptureStream) draw();
+        stopDrawing = () => {
+          drawing = false;
+          if (raf) window.cancelAnimationFrame(raf);
+        };
+      }
+    }
+    if (!videoCaptureStream && input.support.captureMethod) {
+      source = sourceStream(video, input.support.captureMethod);
       videoCaptureStream = source;
     }
-
-    const captureVideoTrack = videoCaptureStream.getVideoTracks()[0];
+    const captureVideoTrack = videoCaptureStream?.getVideoTracks()[0];
     if (!captureVideoTrack) {
-      throw new VideoUploadError(fallbackPrepareMessage);
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
-    output = new MediaStream();
-    output.addTrack(captureVideoTrack);
-    const captureAudioTrack = audioDestination.stream.getAudioTracks()[0];
-    if (captureAudioTrack) {
-      output.addTrack(captureAudioTrack);
-    }
-
-    recorder = createRecorder(
-      output,
-      input.support.mimeType,
-      input.durationMs,
-      output.getAudioTracks().length > 0,
+    const sourceHasAudio = sourceHasAudioTrack(
+      video,
+      source,
+      input.support.captureMethod,
     );
-    const activeRecorder = recorder;
-    waitForRecorderStop = new Promise<void>((resolve, reject) => {
-      onRecorderData = (event: BlobEvent) => {
-        if (event.data.size > 0) chunks.push(event.data);
-      };
-      onRecorderStop = () => resolve();
-      onRecorderError = () =>
-        reject(new VideoUploadError(fallbackPrepareMessage));
-      activeRecorder.addEventListener("dataavailable", onRecorderData);
-      activeRecorder.addEventListener("stop", onRecorderStop, { once: true });
-      activeRecorder.addEventListener("error", onRecorderError, {
-        once: true,
-      });
-    });
 
-    activeRecorder.start(750);
-    const playback = video.play();
-    try {
+    const AudioContextCtor = webAudioContextConstructor();
+    if (AudioContextCtor) {
+      try {
+        if (primedAudioContext && primedAudioContext.state !== "closed") {
+          audioContext = primedAudioContext;
+        } else {
+          audioContext = new AudioContextCtor();
+          releaseAudioContext = true;
+        }
+        audioNode = audioContext.createMediaElementSource(video);
+        audioDestination = audioContext.createMediaStreamDestination();
+        audioNode.connect(audioDestination);
+        await resumeAudioContext(audioContext, input.signal);
+      } catch (error) {
+        audioNode?.disconnect();
+        audioDestination?.disconnect();
+        audioNode = null;
+        audioDestination = null;
+        if (releaseAudioContext) {
+          await audioContext?.close().catch(() => undefined);
+        }
+        audioContext = null;
+        releaseAudioContext = false;
+        if (isAbortError(error)) throw error;
+      }
+    }
+    if (sourceHasAudio && !audioDestination) {
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+    }
+
+    const startRecording = (withAudio: boolean) => {
+      const generation = ++recordingGeneration;
+      chunks.length = 0;
+      const stream = new MediaStream();
+      stream.addTrack(captureVideoTrack);
+      if (withAudio && audioDestination && !video.muted) {
+        const captureAudioTrack = audioDestination.stream.getAudioTracks()[0];
+        if (captureAudioTrack) stream.addTrack(captureAudioTrack);
+      }
+      const activeRecorder = createRecorder(
+        stream,
+        input.support.mimeType,
+        stream.getAudioTracks().length > 0,
+      );
+      recorder = activeRecorder;
+      const stopped = new Promise<void>((resolve, reject) => {
+        onRecorderData = (event: BlobEvent) => {
+          if (generation !== recordingGeneration || event.data.size < 1) return;
+          chunks.push(event.data);
+        };
+        onRecorderStop = () => resolve();
+        onRecorderError = () =>
+          reject(new VideoUploadError(fallbackPrepareMessage));
+        activeRecorder.addEventListener("dataavailable", onRecorderData);
+        activeRecorder.addEventListener("stop", onRecorderStop, {
+          once: true,
+        });
+        activeRecorder.addEventListener("error", onRecorderError, {
+          once: true,
+        });
+      });
+      waitForRecorderStop = stopped;
+      activeRecorder.start(750);
+      return { recorder: activeRecorder, stopped, stream };
+    };
+
+    const playVideo = async () => {
+      const playback = video.play();
       if (playback) await playback;
-    } catch {
-      throw new VideoUploadError(prepareTimeoutMessage, true);
+    };
+
+    let recording = startRecording(Boolean(audioDestination));
+    output = recording.stream;
+    try {
+      await playVideo();
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      throwIfAborted(input.signal);
+      // iPhone Safari rejects unmuted playback after the picker gesture ends.
+      // A muted retry would record silence, so a clip that has audio keeps
+      // the original instead. Silent clips can still re-encode muted.
+      if (sourceHasAudio) {
+        throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+      }
+      await abandonRecording();
+      video.pause();
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Ignore seeks that race the first frame.
+      }
+      video.muted = true;
+      recording = startRecording(false);
+      output = recording.stream;
+      try {
+        await playVideo();
+      } catch (playError) {
+        if (isAbortError(playError)) throw playError;
+        throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+      }
     }
     await waitForPlaybackFinished({
       signal: input.signal,
       timeoutMs: playbackTimeoutMs(input.durationMs),
       video,
     });
-    if (recorder.state !== "inactive") recorder.stop();
-    await waitForRecorderStop;
+    if (recording.recorder.state !== "inactive") recording.recorder.stop();
+    await recording.stopped;
     throwIfAborted(input.signal);
+    if (sourceHasAudio && recording.stream.getAudioTracks().length < 1) {
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+    }
 
     const blob = new Blob(chunks, {
-      type: recorder.mimeType || input.support.mimeType,
+      type: recording.recorder.mimeType || input.support.mimeType,
     });
     if (blob.size < 1) throw new VideoUploadError(fallbackPrepareMessage);
     const extension = /webm/iu.test(blob.type) ? "webm" : "mp4";
@@ -506,43 +681,17 @@ async function compressWithMediaRecorder(
     }
     return file;
   } finally {
-    if (audioNode) {
-      audioNode.disconnect();
-    }
-    if (audioDestination) {
-      audioDestination.disconnect();
-    }
-    if (audioContext) {
+    if (audioNode) audioNode.disconnect();
+    if (audioDestination) audioDestination.disconnect();
+    if (releaseAudioContext && audioContext) {
       await audioContext.close().catch(() => undefined);
     }
-    if (recorder) {
-      if (onRecorderData) {
-        recorder.removeEventListener("dataavailable", onRecorderData);
-      }
-      if (onRecorderStop) recorder.removeEventListener("stop", onRecorderStop);
-      if (onRecorderError) {
-        recorder.removeEventListener("error", onRecorderError);
-      }
-      if (recorder.state !== "inactive") {
-        try {
-          recorder.stop();
-        } catch {
-          // Ignore invalid-state stops while cleaning up.
-        }
-      }
-    }
-    if (waitForRecorderStop) {
-      await Promise.race([
-        waitForRecorderStop.catch(() => undefined),
-        new Promise<void>((resolve) =>
-          window.setTimeout(resolve, recorderStopTimeoutMs),
-        ),
-      ]);
-    }
+    await abandonRecording();
     stopDrawing();
     video.pause();
     video.removeAttribute("src");
     video.load();
+    video.remove();
     output?.getTracks().forEach((track) => track.stop());
     if (source && source !== output) {
       source.getTracks().forEach((track) => track.stop());
@@ -551,13 +700,15 @@ async function compressWithMediaRecorder(
   }
 }
 
-function shouldAttemptCompression(file: File, width: number, height: number) {
-  const normalizedType = file.type.trim().toLowerCase();
+function shouldAttemptCompression(
+  file: File,
+  width: number,
+  height: number,
+  durationMs: number,
+) {
   return (
-    file.size > maximumStoredVideoBytes ||
-    Math.max(width, height) > preferredVideoLongEdgePx ||
-    normalizedType === "video/quicktime" ||
-    normalizedType === "video/x-m4v"
+    file.size > targetStoredVideoBytes(durationMs) ||
+    Math.max(width, height) > preferredVideoLongEdgePx
   );
 }
 
@@ -579,10 +730,12 @@ export async function prepareVideoUploadFile(
     input.file,
     input.width,
     input.height,
+    input.durationMs,
   );
+  const originalIsUploadable = originalWithinBackstop(input.file.size);
 
   if (!support || !needsCompression) {
-    if (input.file.size > maximumStoredVideoBytes) {
+    if (!originalIsUploadable) {
       logBackstopEdgeCase({
         durationMs: input.durationMs,
         fileSize: input.file.size,
@@ -599,23 +752,34 @@ export async function prepareVideoUploadFile(
       ...input,
       support,
     });
-    if (compressed.size > maximumStoredVideoBytes) {
-      logBackstopEdgeCase({
-        durationMs: input.durationMs,
-        fileSize: compressed.size,
-        reason: "compressed_output_above_backstop",
-        type: compressed.type,
-      });
-      throw new VideoUploadError(storedVideoTooLargeMessage, false);
-    }
     if (compressed.size < 1) {
       throw new VideoUploadError(fallbackPrepareMessage);
     }
-    return { file: compressed, compressed: true };
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw error;
+    const compressedIsUploadable = reencodedWithinCeiling(
+      compressed.size,
+      input.durationMs,
+    );
+    if (compressedIsUploadable && compressed.size < input.file.size) {
+      return { file: compressed, compressed: true };
     }
+    if (originalIsUploadable) {
+      return { file: input.file, compressed: false };
+    }
+    if (compressedIsUploadable) {
+      return { file: compressed, compressed: true };
+    }
+    logBackstopEdgeCase({
+      durationMs: input.durationMs,
+      fileSize: compressed.size,
+      reason:
+        compressed.size > maximumStoredVideoBytes
+          ? "compressed_output_above_backstop"
+          : "compressed_output_above_target",
+      type: compressed.type,
+    });
+    throw new VideoUploadError(storedVideoTooLargeMessage, false);
+  } catch (error) {
+    if (isAbortError(error)) throw error;
     if (error instanceof VideoUploadError) {
       if (
         error.message === storedVideoTooLargeMessage ||
@@ -623,7 +787,7 @@ export async function prepareVideoUploadFile(
       ) {
         throw error;
       }
-      if (input.file.size <= maximumStoredVideoBytes) {
+      if (originalIsUploadable) {
         return { file: input.file, compressed: false };
       }
       if (error.message === prepareTimeoutMessage) {
@@ -643,7 +807,7 @@ export async function prepareVideoUploadFile(
       });
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
-    if (input.file.size <= maximumStoredVideoBytes) {
+    if (originalIsUploadable) {
       return { file: input.file, compressed: false };
     }
     throw new VideoUploadError(unsupportedVideoCompressionMessage, false);

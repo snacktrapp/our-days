@@ -21,7 +21,6 @@ import {
 import type { LocalMedia } from "./types";
 
 const maximumPhotoBytes = 25 * 1024 * 1024;
-const maximumVideoBytes = maximumStoredVideoBytes;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const plainDatePattern = /^\d{4}-\d{2}-\d{2}$/u;
@@ -257,7 +256,7 @@ export async function publishVerifiedVideoMoment(
   ) {
     throw new LocalMediaCoordinatorError(overDurationVideoMessage);
   }
-  if (input.file.size < 1 || input.file.size > maximumVideoBytes) {
+  if (input.file.size < 1 || input.file.size > maximumStoredVideoBytes) {
     throw new LocalMediaCoordinatorError(storedVideoTooLargeMessage);
   }
   const bytes = Buffer.from(await input.file.arrayBuffer());
