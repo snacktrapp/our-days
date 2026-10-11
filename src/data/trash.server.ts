@@ -22,6 +22,7 @@ export type TrashedMomentViewModel = Readonly<{
   placeName?: string;
   occurredOn: string;
   revision: number;
+  mediaPurged?: boolean;
 }>;
 
 export async function loadManageableTrash(
@@ -57,6 +58,7 @@ export async function loadManageableTrash(
     placeName: moment.place_name ?? undefined,
     occurredOn: moment.occurred_on,
     revision: moment.revision,
+    mediaPurged: moment.media_purged === true,
   }));
 }
 
