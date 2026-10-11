@@ -2834,6 +2834,13 @@ span.moment-place-line {
   margin-top: 0.4rem;
 }
 
+.trash-purged {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .trash-sign-out {
   margin: -6.5rem 1.25rem 8rem;
 }
@@ -6695,6 +6702,7 @@ html.overlay-open .bottom-nav {
 .composer-error,
 .inline-conversation-error,
 .trash-error,
+.trash-purged,
 .auth-error,
 .field-error,
 .settings-action-error,

@@ -1333,6 +1333,7 @@ export type Database = {
           journal_person_accent: string;
           journal_person_id: string;
           journal_person_name: string;
+          media_purged: boolean;
           moment_id: string;
           moment_kind: string;
           moment_title: string;
@@ -1419,6 +1420,14 @@ export type Database = {
           tagged_people: Json;
           time_precision: string;
           updated_at: string;
+        }[];
+      };
+      list_moment_media_purge_candidates: {
+        Args: { batch_limit: number };
+        Returns: {
+          bucket_id: string;
+          moment_id: string;
+          object_path: string;
         }[];
       };
       list_my_mention_notifications: {
@@ -1638,6 +1647,13 @@ export type Database = {
           recipient_binding_hex: string;
           target_auth_user_id: string;
           token_sha256_hex: string;
+        }[];
+      };
+      record_moment_media_purge: {
+        Args: { bucket_id: string; object_path: string };
+        Returns: {
+          reason: string;
+          recorded: boolean;
         }[];
       };
       record_photo_card_rendition: {

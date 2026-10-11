@@ -34,6 +34,23 @@ function normalizeHost(value: string | null) {
     .replace(/:(?:80|443)$/u, "");
 }
 
+async function intakeObjectIsMissing(
+  bucket: {
+    exists?: (
+      path: string,
+    ) => PromiseLike<{ data: boolean | null; error: unknown }>;
+  },
+  objectPath: string,
+) {
+  if (typeof bucket.exists !== "function") return false;
+  try {
+    const { data, error } = await bucket.exists(objectPath);
+    return !error && data === false;
+  } catch {
+    return false;
+  }
+}
+
 function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;
@@ -92,23 +109,25 @@ async function cleanupPublishedIntake(
 
   const bucketId = cleanup.bucket_id;
   const objectPath = cleanup.object_path;
-  let removedPaths: string[] = [];
+  let removed = false;
   try {
-    removedPaths = await withAuthenticatedPhotoWorkerClient(
-      async (workerClient) => {
-        const { data: removedRows, error: removeError } =
-          await workerClient.storage.from(bucketId).remove([objectPath]);
-        if (removeError) throw removeError;
-        return (removedRows ?? [])
-          .map((row) => {
-            if (!row || typeof row !== "object") return null;
-            if ("name" in row && typeof row.name === "string") return row.name;
-            if ("path" in row && typeof row.path === "string") return row.path;
-            return null;
-          })
-          .filter((path): path is string => Boolean(path));
-      },
-    );
+    removed = await withAuthenticatedPhotoWorkerClient(async (workerClient) => {
+      const bucket = workerClient.storage.from(bucketId);
+      const { data: removedRows, error: removeError } = await bucket.remove([
+        objectPath,
+      ]);
+      if (removeError) throw removeError;
+      const removedPaths = (removedRows ?? [])
+        .map((row) => {
+          if (!row || typeof row !== "object") return null;
+          if ("name" in row && typeof row.name === "string") return row.name;
+          if ("path" in row && typeof row.path === "string") return row.path;
+          return null;
+        })
+        .filter((path): path is string => Boolean(path));
+      if (removedPaths.includes(objectPath)) return true;
+      return intakeObjectIsMissing(bucket, objectPath);
+    });
   } catch {
     console.warn("[photo-process] intake cleanup remove failed", {
       bucketId: cleanup.bucket_id,
@@ -121,7 +140,7 @@ async function cleanupPublishedIntake(
     return;
   }
 
-  if (!removedPaths.includes(objectPath)) {
+  if (!removed) {
     console.warn("[photo-process] cleanup-not-removed", {
       bucketId: cleanup.bucket_id,
       intakeId,

@@ -109,8 +109,8 @@ export function TrashPanel({
       tabIndex={-1}
     >
       <p className="section-intro">
-        A private, reversible place for moments you may want back. No permanent
-        deletion policy is active yet.
+        Moments you remove stay here for 30 days so you can put them back. After
+        that, photos and video are deleted and those posts cannot be restored.
       </p>
       <h2 id="trash-title" className="sr-only">
         Trashed moments
@@ -141,12 +141,18 @@ export function TrashPanel({
                       ? (moment.placeName ?? "Remembered place")
                       : moment.body}
                 </p>
-                <RestoreButton
-                  moment={moment}
-                  restore={restore}
-                  position={index + 1}
-                  total={moments.length}
-                />
+                {moment.mediaPurged ? (
+                  <p className="trash-purged">
+                    Photos and video were permanently removed.
+                  </p>
+                ) : (
+                  <RestoreButton
+                    moment={moment}
+                    restore={restore}
+                    position={index + 1}
+                    total={moments.length}
+                  />
+                )}
               </div>
             </li>
           ))}

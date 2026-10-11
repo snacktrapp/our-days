@@ -69,6 +69,31 @@ describe("TrashPanel", () => {
     ).toBeDisabled();
   });
 
+  it("does not offer restore after photos and video were purged", () => {
+    render(
+      <TrashPanel
+        moments={[
+          {
+            id: "moment-1",
+            journalPersonName: "Brian",
+            journalPersonAccent: "teal",
+            kind: "thought",
+            body: "First memory",
+            occurredOn: "2026-08-28",
+            revision: 2,
+            mediaPurged: true,
+          },
+        ]}
+        restore={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Restore/u })).toBeNull();
+    expect(
+      screen.getByText("Photos and video were permanently removed."),
+    ).toBeInTheDocument();
+  });
+
   it("identifies title-only milestones and place-only locations", () => {
     render(
       <TrashPanel

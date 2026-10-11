@@ -302,6 +302,47 @@ describe("private photo processing route", () => {
     expect(mocks.workerRemove).toHaveBeenCalledWith([intakeObjectPath]);
   });
 
+  it("treats an already-missing intake file as cleanup success", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const infoSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    const exists = vi.fn(async () => ({ data: false, error: null }));
+    mocks.workerRemove.mockResolvedValue({
+      data: [],
+      error: null,
+    });
+    mocks.workerStorageFrom.mockImplementation((bucket: string) => ({
+      exists: bucket === "our-days-intake" ? exists : vi.fn(),
+      remove:
+        bucket === "our-days-intake"
+          ? mocks.workerRemove
+          : vi.fn(async () => ({ data: [], error: null })),
+    }));
+
+    try {
+      const response = await request();
+      expect(response.status).toBe(200);
+      expect(exists).toHaveBeenCalledWith(intakeObjectPath);
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        "[photo-process] cleanup-not-removed",
+        expect.anything(),
+      );
+      expect(infoSpy).toHaveBeenCalledWith(
+        "[photo-process] intake cleanup removed",
+        expect.objectContaining({
+          bucketId: "our-days-intake",
+          objectPath: intakeObjectPath,
+        }),
+      );
+    } finally {
+      warnSpy.mockRestore();
+      infoSpy.mockRestore();
+    }
+  });
+
   it("reports cleanup-not-removed when storage removal deletes nothing", async () => {
     const warnSpy = vi
       .spyOn(console, "warn")
