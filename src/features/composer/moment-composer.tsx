@@ -49,6 +49,7 @@ import {
   overDurationVideoMessage,
   sourceVideoTooLargeMessage,
 } from "@/features/video/video-upload-policy";
+import { primeVideoCompressionAudio } from "@/features/video/prepare-video-upload-file";
 import {
   emptyBibleVerseSelection,
   formatBibleVerseMoment,
@@ -1957,7 +1958,7 @@ export function MomentComposer({
                       <span>Choose photo or video</span>
                       <small>
                         {connectedPhotoAvailable
-                          ? "Videos up to 40 seconds. The original uploads privately to this family."
+                          ? "Videos up to 40 seconds. A smaller copy uploads privately to this family."
                           : "Videos up to 40 seconds. It stays on this device in the preview."}
                       </small>
                       <input
@@ -1972,6 +1973,9 @@ export function MomentComposer({
                         }
                         onChange={(event) => {
                           const files = [...(event.currentTarget.files ?? [])];
+                          if (files.some((file) => acceptedVideoMime(file))) {
+                            primeVideoCompressionAudio();
+                          }
                           event.currentTarget.blur();
                           editorHeadingRef.current?.focus({
                             preventScroll: true,
